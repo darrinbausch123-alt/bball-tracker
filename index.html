@@ -11,24 +11,31 @@
             margin: 0; 
             background: #121212; 
             color: white; 
-            overflow: hidden; /* Prevents accidental scrolling */
-            touch-action: manipulation; /* Disables browser double-tap-to-zoom */
+            overflow-x: hidden;
+            touch-action: manipulation;
         }
         
         #stats-bar {
             background: #1f1f1f;
-            padding: 20px 10px;
+            padding: 15px 10px;
             display: flex;
             justify-content: space-around;
             border-bottom: 1px solid #333;
         }
-        .stat-value { display: block; font-size: 28px; font-weight: 800; color: #2ecc71; }
-        .stat-label { font-size: 11px; text-transform: uppercase; color: #888; }
+        .stat-value { display: block; font-size: 24px; font-weight: 800; color: #2ecc71; }
+        .stat-label { font-size: 10px; text-transform: uppercase; color: #888; }
+
+        /* Voice Title Styling */
+        #game-title {
+            margin: 15px 10px 5px 10px;
+            font-size: 18px;
+            color: #f1c40f; /* Gold color for the title */
+            min-height: 1.2em;
+        }
 
         #court-container {
             position: relative;
             display: inline-block;
-            margin-top: 15px;
             touch-action: none; 
         }
 
@@ -51,14 +58,26 @@
         .make { background-color: #2ecc71; }
         .miss { background-color: #e74c3c; }
 
-        .instructions { color: #888; font-size: 14px; margin: 10px; }
-        .controls { margin: 20px; display: flex; gap: 10px; justify-content: center; }
+        .instructions { color: #888; font-size: 12px; margin: 10px; }
+        
+        .controls { 
+            margin: 15px; 
+            display: flex; 
+            gap: 10px; 
+            flex-wrap: wrap;
+            justify-content: center; 
+        }
         
         button { 
-            padding: 15px; font-weight: bold; border-radius: 8px; border: none; color: white; flex: 1; max-width: 120px;
+            padding: 12px; font-weight: bold; border-radius: 8px; border: none; color: white; cursor: pointer;
         }
-        .btn-undo { background: #444; }
-        .btn-reset { background: #c0392b; }
+        .btn-voice { background: #3498db; width: 90vw; max-width: 400px; margin-bottom: 10px; }
+        .btn-undo { background: #444; flex: 1; max-width: 120px; }
+        .btn-reset { background: #c0392b; flex: 1; max-width: 120px; }
+        
+        /* Pulse animation for recording */
+        .recording { animation: pulse 1.5s infinite; background: #e67e22 !important; }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
     </style>
 </head>
 <body>
@@ -66,53 +85,94 @@
     <div id="stats-bar">
         <div class="stat-item">
             <span id="stat-total" class="stat-value">0</span>
-            <span class="stat-label">Total</span>
+            <span class="stat-label">Total Shots</span>
         </div>
         <div class="stat-item">
             <span id="stat-pct" class="stat-value">0%</span>
-            <span class="stat-label">FG%</span>
+            <span class="stat-label">Field Goal %</span>
         </div>
     </div>
 
-    <p class="instructions">Single Tap = 🟢 MAKE | Double Tap = 🔴 MISS</p>
+    <h1 id="game-title">Tap Mic to Name Game</h1>
+
+    <div class="controls">
+        <button id="voice-btn" class="btn-voice" onclick="startSpeech()">🎤 Tap to Speak Game Info</button>
+    </div>
 
     <div id="court-container">
         <img id="court-img" src="court.png" alt="Court">
     </div>
 
+    <p class="instructions">Single Tap = 🟢 MAKE | Double Tap = 🔴 MISS</p>
+
     <div class="controls">
         <button class="btn-undo" onclick="undoLast()">Undo</button>
-        <button class="btn-reset" onclick="clearShots()">Reset</button>
+        <button class="btn-reset" onclick="clearShots()">Reset All</button>
     </div>
 
     <script>
         const container = document.getElementById('court-container');
+        const gameTitleDisplay = document.getElementById('game-title');
+        const voiceBtn = document.getElementById('voice-btn');
         let shots = [];
         let tapTimer = null;
 
         window.onload = function() {
             const savedData = localStorage.getItem('basketballShots');
+            const savedTitle = localStorage.getItem('basketballGameTitle');
+            
             if (savedData) {
                 shots = JSON.parse(savedData);
                 refreshUI();
             }
+            if (savedTitle) {
+                gameTitleDisplay.innerText = savedTitle;
+            }
         };
 
-        // Custom Double-Tap Logic
+        // --- VOICE TO TEXT LOGIC ---
+        function startSpeech() {
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            
+            if (!SpeechRecognition) {
+                alert("Voice recognition is not supported on this browser. Please use Safari on iPhone.");
+                return;
+            }
+
+            const recognition = new SpeechRecognition();
+            recognition.lang = 'en-US';
+            
+            recognition.onstart = () => {
+                voiceBtn.innerText = "Listening...";
+                voiceBtn.classList.add('recording');
+            };
+
+            recognition.onresult = (event) => {
+                const transcript = event.results[0][0].transcript;
+                gameTitleDisplay.innerText = transcript;
+                localStorage.setItem('basketballGameTitle', transcript);
+            };
+
+            recognition.onend = () => {
+                voiceBtn.innerText = "🎤 Tap to Speak Game Info";
+                voiceBtn.classList.remove('recording');
+            };
+
+            recognition.start();
+        }
+
+        // --- SHOT TRACKING LOGIC ---
         container.addEventListener('click', function(e) {
             const rect = container.getBoundingClientRect();
             const x = ((e.clientX - rect.left) / rect.width) * 100;
             const y = ((e.clientY - rect.top) / rect.height) * 100;
 
             if (tapTimer === null) {
-                // First tap detected! Start a timer to wait for a second tap
                 tapTimer = setTimeout(() => {
-                    // Timer finished without a second tap -> It's a MAKE
                     recordShot(x, y, 'make');
                     tapTimer = null;
-                }, 250); // 250ms window
+                }, 250);
             } else {
-                // Second tap detected within 250ms -> It's a MISS
                 clearTimeout(tapTimer);
                 tapTimer = null;
                 recordShot(x, y, 'miss');
@@ -150,14 +210,18 @@
         }
 
         function undoLast() {
-            shots.pop();
-            saveAndRefresh();
+            if(shots.length > 0) {
+                shots.pop();
+                saveAndRefresh();
+            }
         }
 
         function clearShots() {
-            if(confirm("Reset all data?")) {
+            if(confirm("Reset everything?")) {
                 shots = [];
+                gameTitleDisplay.innerText = "Tap Mic to Name Game";
                 localStorage.removeItem('basketballShots');
+                localStorage.removeItem('basketballGameTitle');
                 refreshUI();
             }
         }
