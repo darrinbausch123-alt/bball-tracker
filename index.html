@@ -13,7 +13,7 @@
             color: white; 
             display: flex;
             flex-direction: column;
-            align-items: center; /* Centers everything horizontally */
+            align-items: center;
             min-height: 100vh;
             touch-action: manipulation;
         }
@@ -29,12 +29,11 @@
         .stat-value { display: block; font-size: 26px; font-weight: 800; color: #2ecc71; }
         .stat-label { font-size: 10px; text-transform: uppercase; color: #888; }
 
-        /* Forces the input to stay on its own line above the court */
         #game-name-input {
             display: block; 
             width: 85%;
             max-width: 400px;
-            margin: 20px 0; /* Vertical spacing */
+            margin: 20px 0;
             padding: 12px;
             background: #2a2a2a;
             border: 1px solid #444;
@@ -47,7 +46,7 @@
 
         #court-container {
             position: relative;
-            display: block; /* Changed from inline-block to block */
+            display: block;
             margin: 0 auto;
             touch-action: none; 
         }
@@ -76,16 +75,18 @@
         
         .controls { 
             width: 90%;
-            max-width: 400px;
+            max-width: 450px;
             display: flex; 
-            gap: 15px; 
+            gap: 10px; 
             margin-bottom: 30px;
+            flex-wrap: wrap;
         }
         
         button { 
-            padding: 15px; font-weight: bold; border-radius: 10px; border: none; color: white; flex: 1;
+            padding: 15px; font-weight: bold; border-radius: 10px; border: none; color: white; flex: 1; min-width: 100px;
         }
         .btn-undo { background: #444; }
+        .btn-export { background: #3498db; } /* Blue for Export */
         .btn-reset { background: #c0392b; }
     </style>
 </head>
@@ -111,8 +112,9 @@
     <p class="instructions">Single Tap = 🟢 MAKE | Double Tap = 🔴 MISS</p>
 
     <div class="controls">
-        <button class="btn-undo" onclick="undoLast()">Undo Last</button>
-        <button class="btn-reset" onclick="clearShots()">Reset All</button>
+        <button class="btn-undo" onclick="undoLast()">Undo</button>
+        <button class="btn-export" onclick="exportData()">Email Data</button>
+        <button class="btn-reset" onclick="clearShots()">Reset</button>
     </div>
 
     <script>
@@ -189,6 +191,31 @@
                 shots.pop();
                 saveAndRefresh();
             }
+        }
+
+        // --- NEW EXPORT FUNCTION ---
+        function exportData() {
+            if (shots.length === 0) {
+                alert("No shots to export yet!");
+                return;
+            }
+
+            const gameName = nameInput.value || "Untitled_Game";
+            
+            // Create CSV Header
+            let csvContent = "Shot_Number,X_Coord_Pct,Y_Coord_Pct,Result\n";
+            
+            // Loop through shots and add rows
+            shots.forEach((shot, index) => {
+                csvContent += `${index + 1},${shot.x.toFixed(2)},${shot.y.toFixed(2)},${shot.result}\n`;
+            });
+
+            // Prepare the email link
+            const subject = encodeURIComponent(`Shot Data: ${gameName}`);
+            const body = encodeURIComponent(`Game: ${gameName}\n\nCSV Data Below:\n\n${csvContent}`);
+            
+            // Open the iPhone's default email app
+            window.location.href = `mailto:?subject=${subject}&body=${body}`;
         }
 
         function clearShots() {
