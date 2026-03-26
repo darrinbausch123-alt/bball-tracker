@@ -197,7 +197,7 @@
             }
         }
 
-        // --- NEW PNG GENERATION LOGIC ---
+        // --- PNG GENERATION LOGIC WITH LARGER DOTS ---
         function generateImage() {
             if (shots.length === 0) { alert("No shots to export!"); return; }
 
@@ -209,17 +209,17 @@
             // 1. Draw Court
             ctx.drawImage(courtImg, 0, 0);
 
-            // 2. Draw Shots
+            // 2. Draw Shots - Radius increased from 10 to 20 for 100% larger dots
             shots.forEach(shot => {
                 const posX = (shot.x / 100) * canvas.width;
                 const posY = (shot.y / 100) * canvas.height;
                 
                 ctx.beginPath();
-                ctx.arc(posX, posY, 10, 0, 2 * Math.PI);
+                ctx.arc(posX, posY, 20, 0, 2 * Math.PI); // Radius is now 20
                 ctx.fillStyle = (shot.result === 'make') ? '#2ecc71' : '#e74c3c';
                 ctx.fill();
                 ctx.strokeStyle = 'white';
-                ctx.lineWidth = 2;
+                ctx.lineWidth = 4; // also made the white border slightly thicker for visibility
                 ctx.stroke();
             });
 
