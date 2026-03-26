@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>B-Ball Tracker Pro</title>
+    <style>
+        /* Modern Dark Theme Styling */
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
+            text-align: center; 
+            margin: 0; 
+            background: #121212; 
+            color: white; 
+            overflow-x: hidden;
+        }
+        
+        /* Dashboard for Stats */
+        #stats-bar {
+            background: #1f1f1f;
+            padding: 20px 10px;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            display: flex;
+            justify-content: space-around;
+            border-bottom: 1px solid #333;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+        }
+        .stat-item { flex: 1; }
+        .stat-value { display: block; font-size: 28px; font-weight: 800; color: #2ecc71; }
+        .stat-label { font-size: 11px; text-transform: uppercase; color: #888; letter-spacing: 1px; }
+
+        /* The Visual Court */
+        #court-container {
+            position: relative;
+            display: inline-block;
+            margin-top: 15px;
+            touch-action: none; /* Prevents iPhone "bounce" scrolling while tapping */
+            cursor: crosshair;
+        }
+
+        #court-img {
+            width: 95vw;
+            max-width: 500px;
+            display: block;
+            border-radius: 12px;
+            border: 1px solid #444;
+        }
+
+        /* Shot Markers */
+        .dot {
+            position: absolute;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            border: 2px solid white;
+            box-shadow: 0 0 8px rgba(0,0,0,0.8);
+            pointer-events: none; /* Allows tapping "through" dots */
+        }
+        .make { background-color: #2ecc71; }
+        .miss { background-color: #e74c3c; }
+
+        /* Mobile Friendly Buttons */
+        .controls { 
+            margin: 30px auto; 
+            display: flex; 
+            gap: 10px; 
+            justify-content: center;
+            padding: 0 15px;
+        }
+        button { 
+            padding: 15px 20px; 
+            font-size: 14px; 
+            border: none; 
+            border-radius: 10px;
+            font-weight: bold;
+            color: white;
+            flex: 1;
+            max-width: 150px;
+        }
+        .btn-undo { background: #555; }
+        .btn-reset { background: #e74c3c; }
+        button:active { opacity: 0.7; transform: scale(0.98); }
+    </style>
+</head>
+<body>
+
+    <div id="stats-bar">
+        <div class="stat-item">
+            <span id="stat-total" class="stat-value">0</span>
+            <span class="stat-label">Total</span>
+        </div>
+        <div class="stat-item">
+            <span id="stat-pct" class="stat-value">0%</span>
+            <span class="stat-label">Field Goal %</span>
+        </div>
+    </div>
+
+    <div id="court-container">
+        <img id="court-img" src="https://upload.wikimedia.org/wikipedia/commons/thumb/d/d1/Basketball_court_half.svg/1024px-Basketball_court_half.svg.png" alt="Court">
+    </div>
+
+    <div class="controls">
+        <button class="btn-undo" onclick="undoLast()">Undo Last</button>
+        <button class="btn-reset" onclick="clearShots()">Reset All</button>
+    </div>
+
+    <script>
+        const container = document.getElementById('court-container');
+        let shots = [];
+
+        // 1. Initial Load: Retrieve saved data from iPhone storage
+        window.onload = function() {
+            const savedData = localStorage.getItem('basketballShots');
+            if (savedData) {
+                shots = JSON.parse(savedData);
+                refreshUI();
+            }
+        };
+
+        // 2. Event Listener: Handle taps on the court
+        container.addEventListener('click', function(e) {
+            const rect = container.getBoundingClientRect();
+            
+            // Calculate percentage coordinates (Responsive)
+            const x = ((e.clientX - rect.left) / rect.width) * 100;
+            const y = ((e.clientY - rect.top) / rect.height) * 100;
+
+            // Simple Make/Miss Prompt
+            const isMake = confirm("WAS IT A MAKE?\n\nOK = Make (Green)\nCancel = Miss (Red)");
+            
+            const shotData = { 
+                id: Date.now(), // Unique ID for every shot
+                x, 
+                y, 
+                result: isMake ? 'make' : 'miss' 
+            };
+            
+            shots.push(shotData);
+            saveAndRefresh();
+        });
+
+        // 3. Logic: Update Stats and Redraw Dots
+        function refreshUI() {
+            // Remove existing dots before redraw
+            const existingDots = document.querySelectorAll('.dot');
+            existingDots.forEach(d => d.remove());
+
+            // Draw all shots
+            shots.forEach(shot => {
+                const dot = document.createElement('div');
+                dot.className = `dot ${shot.result}`;
+                dot.style.left = shot.x + '%';
+                dot.style.top = shot.y + '%';
+                container.appendChild(dot);
+            });
+
+            // Update Header Stats
+            const total = shots.length;
+            const makes = shots.filter(s => s.result === 'make').length;
+            const percentage = total === 0 ? 0 : Math.round((makes / total) * 100);
+
+            document.getElementById('stat-total').innerText = total;
+            document.getElementById('stat-pct').innerText = percentage + "%";
+        }
+
+        // 4. Persistence: Save to Browser Storage
+        function saveAndRefresh() {
+            localStorage.setItem('basketballShots', JSON.stringify(shots));
+            refreshUI();
+        }
+
+        // 5. Features: Undo and Clear
+        function undoLast() {
+            if (shots.length > 0) {
+                shots.pop(); // Remove the last item in the array
+                saveAndRefresh();
+            }
+        }
+
+        function clearShots() {
+            if(confirm("Are you sure? This will delete all session data.")) {
+                shots = [];
+                localStorage.removeItem('basketballShots');
+                refreshUI();
+            }
+        }
+    </script>
+</body>
+</html>
