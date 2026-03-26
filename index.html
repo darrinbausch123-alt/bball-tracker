@@ -61,11 +61,11 @@
 
         .dot {
             position: absolute;
-            width: 18px;
-            height: 18px;
+            width: 16px;
+            height: 16px;
             border-radius: 50%;
             transform: translate(-50%, -50%);
-            border: 2px solid white;
+            border: 1.5px solid white;
             pointer-events: none;
         }
         .make { background-color: #2ecc71; }
@@ -86,8 +86,11 @@
             padding: 15px; font-weight: bold; border-radius: 10px; border: none; color: white; flex: 1; min-width: 100px;
         }
         .btn-undo { background: #444; }
-        .btn-export { background: #3498db; } /* Blue for Export */
+        .btn-export { background: #3498db; }
         .btn-reset { background: #c0392b; }
+
+        /* Hidden canvas for image generation */
+        #export-canvas { display: none; }
     </style>
 </head>
 <body>
@@ -106,20 +109,24 @@
     <input type="text" id="game-name-input" placeholder="Tap to Enter Game Name" oninput="saveGameName()">
 
     <div id="court-container">
-        <img id="court-img" src="court.png" alt="Court">
+        <img id="court-img" src="court.png" alt="Court" crossorigin="anonymous">
     </div>
 
     <p class="instructions">Single Tap = 🟢 MAKE | Double Tap = 🔴 MISS</p>
 
     <div class="controls">
         <button class="btn-undo" onclick="undoLast()">Undo</button>
-        <button class="btn-export" onclick="exportData()">Email Data</button>
+        <button class="btn-export" onclick="generateImage()">Create PNG</button>
         <button class="btn-reset" onclick="clearShots()">Reset</button>
     </div>
 
+    <canvas id="export-canvas"></canvas>
+
     <script>
         const container = document.getElementById('court-container');
+        const courtImg = document.getElementById('court-img');
         const nameInput = document.getElementById('game-name-input');
+        const canvas = document.getElementById('export-canvas');
         let shots = [];
         let tapTimer = null;
 
@@ -164,7 +171,6 @@
         function refreshUI() {
             const existingDots = document.querySelectorAll('.dot');
             existingDots.forEach(d => d.remove());
-
             shots.forEach(shot => {
                 const dot = document.createElement('div');
                 dot.className = `dot ${shot.result}`;
@@ -172,11 +178,9 @@
                 dot.style.top = shot.y + '%';
                 container.appendChild(dot);
             });
-
             const total = shots.length;
             const makes = shots.filter(s => s.result === 'make').length;
             const percentage = total === 0 ? 0 : Math.round((makes / total) * 100);
-
             document.getElementById('stat-total').innerText = total;
             document.getElementById('stat-pct').innerText = percentage + "%";
         }
@@ -193,29 +197,46 @@
             }
         }
 
-        // --- NEW EXPORT FUNCTION ---
-        function exportData() {
-            if (shots.length === 0) {
-                alert("No shots to export yet!");
-                return;
-            }
+        // --- NEW PNG GENERATION LOGIC ---
+        function generateImage() {
+            if (shots.length === 0) { alert("No shots to export!"); return; }
 
-            const gameName = nameInput.value || "Untitled_Game";
-            
-            // Create CSV Header
-            let csvContent = "Shot_Number,X_Coord_Pct,Y_Coord_Pct,Result\n";
-            
-            // Loop through shots and add rows
-            shots.forEach((shot, index) => {
-                csvContent += `${index + 1},${shot.x.toFixed(2)},${shot.y.toFixed(2)},${shot.result}\n`;
+            const ctx = canvas.getContext('2d');
+            // Match canvas size to actual court image size
+            canvas.width = courtImg.naturalWidth;
+            canvas.height = courtImg.naturalHeight;
+
+            // 1. Draw Court
+            ctx.drawImage(courtImg, 0, 0);
+
+            // 2. Draw Shots
+            shots.forEach(shot => {
+                const posX = (shot.x / 100) * canvas.width;
+                const posY = (shot.y / 100) * canvas.height;
+                
+                ctx.beginPath();
+                ctx.arc(posX, posY, 10, 0, 2 * Math.PI);
+                ctx.fillStyle = (shot.result === 'make') ? '#2ecc71' : '#e74c3c';
+                ctx.fill();
+                ctx.strokeStyle = 'white';
+                ctx.lineWidth = 2;
+                ctx.stroke();
             });
 
-            // Prepare the email link
-            const subject = encodeURIComponent(`Shot Data: ${gameName}`);
-            const body = encodeURIComponent(`Game: ${gameName}\n\nCSV Data Below:\n\n${csvContent}`);
-            
-            // Open the iPhone's default email app
-            window.location.href = `mailto:?subject=${subject}&body=${body}`;
+            // 3. Add Title Text
+            ctx.fillStyle = "white";
+            ctx.font = "bold 40px sans-serif";
+            ctx.textAlign = "center";
+            ctx.fillText(nameInput.value || "Game Map", canvas.width / 2, 50);
+
+            // 4. Open the image in a new tab for saving
+            const dataUrl = canvas.toDataURL("image/png");
+            const newWindow = window.open();
+            newWindow.document.write(`<body style="margin:0; background:#121212; display:flex; flex-direction:column; align-items:center; justify-content:center;">
+                <h2 style="color:white; font-family:sans-serif;">Press and Hold Image to Save/Share</h2>
+                <img src="${dataUrl}" style="width:100%; max-width:600px; border-radius:10px; border:2px solid #333;">
+                <button onclick="window.close()" style="margin-top:20px; padding:15px; background:#444; color:white; border:none; border-radius:10px; font-weight:bold;">Back to Tracker</button>
+            </body>`);
         }
 
         function clearShots() {
