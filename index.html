@@ -6,7 +6,7 @@
     <title>B-Ball Tracker Pro</title>
     <style>
         body { 
-            font-family: -apple-system, sans-serif; 
+            font-family: -apple-system, BlinkMacSystemFont, sans-serif; 
             text-align: center; 
             margin: 0; 
             background: #121212; 
@@ -22,16 +22,25 @@
             justify-content: space-around;
             border-bottom: 1px solid #333;
         }
-        .stat-value { display: block; font-size: 24px; font-weight: 800; color: #2ecc71; }
+        .stat-value { display: block; font-size: 26px; font-weight: 800; color: #2ecc71; }
         .stat-label { font-size: 10px; text-transform: uppercase; color: #888; }
 
-        /* Voice Title Styling */
-        #game-title {
-            margin: 15px 10px 5px 10px;
+        /* Game Name Input Styling */
+        #game-name-input {
+            width: 85%;
+            max-width: 400px;
+            margin: 20px auto 10px auto;
+            padding: 12px;
+            background: #2a2a2a;
+            border: 1px solid #444;
+            border-radius: 8px;
+            color: #f1c40f; /* Gold text */
             font-size: 18px;
-            color: #f1c40f; /* Gold color for the title */
-            min-height: 1.2em;
+            text-align: center;
+            font-weight: bold;
+            outline: none;
         }
+        #game-name-input::placeholder { color: #666; font-weight: normal; }
 
         #court-container {
             position: relative;
@@ -44,6 +53,7 @@
             max-width: 500px;
             display: block;
             border-radius: 12px;
+            border: 1px solid #333;
         }
 
         .dot {
@@ -58,26 +68,21 @@
         .make { background-color: #2ecc71; }
         .miss { background-color: #e74c3c; }
 
-        .instructions { color: #888; font-size: 12px; margin: 10px; }
+        .instructions { color: #888; font-size: 13px; margin: 10px; }
         
         .controls { 
-            margin: 15px; 
+            margin: 20px; 
             display: flex; 
-            gap: 10px; 
-            flex-wrap: wrap;
+            gap: 15px; 
             justify-content: center; 
         }
         
         button { 
-            padding: 12px; font-weight: bold; border-radius: 8px; border: none; color: white; cursor: pointer;
+            padding: 15px; font-weight: bold; border-radius: 10px; border: none; color: white; cursor: pointer; flex: 1; max-width: 140px;
         }
-        .btn-voice { background: #3498db; width: 90vw; max-width: 400px; margin-bottom: 10px; }
-        .btn-undo { background: #444; flex: 1; max-width: 120px; }
-        .btn-reset { background: #c0392b; flex: 1; max-width: 120px; }
-        
-        /* Pulse animation for recording */
-        .recording { animation: pulse 1.5s infinite; background: #e67e22 !important; }
-        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
+        .btn-undo { background: #444; }
+        .btn-reset { background: #c0392b; }
+        button:active { opacity: 0.7; }
     </style>
 </head>
 <body>
@@ -93,11 +98,7 @@
         </div>
     </div>
 
-    <h1 id="game-title">Tap Mic to Name Game</h1>
-
-    <div class="controls">
-        <button id="voice-btn" class="btn-voice" onclick="startSpeech()">🎤 Tap to Speak Game Info</button>
-    </div>
+    <input type="text" id="game-name-input" placeholder="Enter Game Name (e.g. vs Iowa Falls)" oninput="saveGameName()">
 
     <div id="court-container">
         <img id="court-img" src="court.png" alt="Court">
@@ -106,62 +107,36 @@
     <p class="instructions">Single Tap = 🟢 MAKE | Double Tap = 🔴 MISS</p>
 
     <div class="controls">
-        <button class="btn-undo" onclick="undoLast()">Undo</button>
+        <button class="btn-undo" onclick="undoLast()">Undo Last</button>
         <button class="btn-reset" onclick="clearShots()">Reset All</button>
     </div>
 
     <script>
         const container = document.getElementById('court-container');
-        const gameTitleDisplay = document.getElementById('game-title');
-        const voiceBtn = document.getElementById('voice-btn');
+        const nameInput = document.getElementById('game-name-input');
         let shots = [];
         let tapTimer = null;
 
+        // 1. Load data on startup
         window.onload = function() {
             const savedData = localStorage.getItem('basketballShots');
-            const savedTitle = localStorage.getItem('basketballGameTitle');
+            const savedName = localStorage.getItem('basketballGameName');
             
             if (savedData) {
                 shots = JSON.parse(savedData);
                 refreshUI();
             }
-            if (savedTitle) {
-                gameTitleDisplay.innerText = savedTitle;
+            if (savedName) {
+                nameInput.value = savedName;
             }
         };
 
-        // --- VOICE TO TEXT LOGIC ---
-        function startSpeech() {
-            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-            
-            if (!SpeechRecognition) {
-                alert("Voice recognition is not supported on this browser. Please use Safari on iPhone.");
-                return;
-            }
-
-            const recognition = new SpeechRecognition();
-            recognition.lang = 'en-US';
-            
-            recognition.onstart = () => {
-                voiceBtn.innerText = "Listening...";
-                voiceBtn.classList.add('recording');
-            };
-
-            recognition.onresult = (event) => {
-                const transcript = event.results[0][0].transcript;
-                gameTitleDisplay.innerText = transcript;
-                localStorage.setItem('basketballGameTitle', transcript);
-            };
-
-            recognition.onend = () => {
-                voiceBtn.innerText = "🎤 Tap to Speak Game Info";
-                voiceBtn.classList.remove('recording');
-            };
-
-            recognition.start();
+        // 2. Save Game Name as you type
+        function saveGameName() {
+            localStorage.setItem('basketballGameName', nameInput.value);
         }
 
-        // --- SHOT TRACKING LOGIC ---
+        // 3. Handle Court Taps (Single/Double Logic)
         container.addEventListener('click', function(e) {
             const rect = container.getBoundingClientRect();
             const x = ((e.clientX - rect.left) / rect.width) * 100;
@@ -217,11 +192,11 @@
         }
 
         function clearShots() {
-            if(confirm("Reset everything?")) {
+            if(confirm("This will clear the court AND the game name. Continue?")) {
                 shots = [];
-                gameTitleDisplay.innerText = "Tap Mic to Name Game";
+                nameInput.value = "";
                 localStorage.removeItem('basketballShots');
-                localStorage.removeItem('basketballGameTitle');
+                localStorage.removeItem('basketballGameName');
                 refreshUI();
             }
         }
