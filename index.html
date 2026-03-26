@@ -5,39 +5,31 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>B-Ball Tracker Pro</title>
     <style>
-        /* Modern Dark Theme Styling */
         body { 
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
+            font-family: -apple-system, sans-serif; 
             text-align: center; 
             margin: 0; 
             background: #121212; 
             color: white; 
-            overflow-x: hidden;
+            overflow: hidden; /* Prevents accidental scrolling */
+            touch-action: manipulation; /* Disables browser double-tap-to-zoom */
         }
         
-        /* Dashboard for Stats */
         #stats-bar {
             background: #1f1f1f;
             padding: 20px 10px;
-            position: sticky;
-            top: 0;
-            z-index: 100;
             display: flex;
             justify-content: space-around;
             border-bottom: 1px solid #333;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
         }
-        .stat-item { flex: 1; }
         .stat-value { display: block; font-size: 28px; font-weight: 800; color: #2ecc71; }
-        .stat-label { font-size: 11px; text-transform: uppercase; color: #888; letter-spacing: 1px; }
+        .stat-label { font-size: 11px; text-transform: uppercase; color: #888; }
 
-        /* The Visual Court */
         #court-container {
             position: relative;
             display: inline-block;
             margin-top: 15px;
-            touch-action: none; /* Prevents iPhone "bounce" scrolling while tapping */
-            cursor: crosshair;
+            touch-action: none; 
         }
 
         #court-img {
@@ -45,44 +37,28 @@
             max-width: 500px;
             display: block;
             border-radius: 12px;
-            border: 1px solid #444;
         }
 
-        /* Shot Markers */
         .dot {
             position: absolute;
-            width: 16px;
-            height: 16px;
+            width: 18px;
+            height: 18px;
             border-radius: 50%;
             transform: translate(-50%, -50%);
             border: 2px solid white;
-            box-shadow: 0 0 8px rgba(0,0,0,0.8);
-            pointer-events: none; /* Allows tapping "through" dots */
+            pointer-events: none;
         }
         .make { background-color: #2ecc71; }
         .miss { background-color: #e74c3c; }
 
-        /* Mobile Friendly Buttons */
-        .controls { 
-            margin: 30px auto; 
-            display: flex; 
-            gap: 10px; 
-            justify-content: center;
-            padding: 0 15px;
-        }
+        .instructions { color: #888; font-size: 14px; margin: 10px; }
+        .controls { margin: 20px; display: flex; gap: 10px; justify-content: center; }
+        
         button { 
-            padding: 15px 20px; 
-            font-size: 14px; 
-            border: none; 
-            border-radius: 10px;
-            font-weight: bold;
-            color: white;
-            flex: 1;
-            max-width: 150px;
+            padding: 15px; font-weight: bold; border-radius: 8px; border: none; color: white; flex: 1; max-width: 120px;
         }
-        .btn-undo { background: #555; }
-        .btn-reset { background: #e74c3c; }
-        button:active { opacity: 0.7; transform: scale(0.98); }
+        .btn-undo { background: #444; }
+        .btn-reset { background: #c0392b; }
     </style>
 </head>
 <body>
@@ -94,24 +70,26 @@
         </div>
         <div class="stat-item">
             <span id="stat-pct" class="stat-value">0%</span>
-            <span class="stat-label">Field Goal %</span>
+            <span class="stat-label">FG%</span>
         </div>
     </div>
 
+    <p class="instructions">Single Tap = 🟢 MAKE | Double Tap = 🔴 MISS</p>
+
     <div id="court-container">
-      <img id="court-img" src="court.png" alt="Court">
+        <img id="court-img" src="court.png" alt="Court">
     </div>
 
     <div class="controls">
-        <button class="btn-undo" onclick="undoLast()">Undo Last</button>
-        <button class="btn-reset" onclick="clearShots()">Reset All</button>
+        <button class="btn-undo" onclick="undoLast()">Undo</button>
+        <button class="btn-reset" onclick="clearShots()">Reset</button>
     </div>
 
     <script>
         const container = document.getElementById('court-container');
         let shots = [];
+        let tapTimer = null;
 
-        // 1. Initial Load: Retrieve saved data from iPhone storage
         window.onload = function() {
             const savedData = localStorage.getItem('basketballShots');
             if (savedData) {
@@ -120,35 +98,36 @@
             }
         };
 
-        // 2. Event Listener: Handle taps on the court
+        // Custom Double-Tap Logic
         container.addEventListener('click', function(e) {
             const rect = container.getBoundingClientRect();
-            
-            // Calculate percentage coordinates (Responsive)
             const x = ((e.clientX - rect.left) / rect.width) * 100;
             const y = ((e.clientY - rect.top) / rect.height) * 100;
 
-            // Simple Make/Miss Prompt
-            const isMake = confirm("WAS IT A MAKE?\n\nOK = Make (Green)\nCancel = Miss (Red)");
-            
-            const shotData = { 
-                id: Date.now(), // Unique ID for every shot
-                x, 
-                y, 
-                result: isMake ? 'make' : 'miss' 
-            };
-            
-            shots.push(shotData);
-            saveAndRefresh();
+            if (tapTimer === null) {
+                // First tap detected! Start a timer to wait for a second tap
+                tapTimer = setTimeout(() => {
+                    // Timer finished without a second tap -> It's a MAKE
+                    recordShot(x, y, 'make');
+                    tapTimer = null;
+                }, 250); // 250ms window
+            } else {
+                // Second tap detected within 250ms -> It's a MISS
+                clearTimeout(tapTimer);
+                tapTimer = null;
+                recordShot(x, y, 'miss');
+            }
         });
 
-        // 3. Logic: Update Stats and Redraw Dots
+        function recordShot(x, y, result) {
+            shots.push({ x, y, result });
+            saveAndRefresh();
+        }
+
         function refreshUI() {
-            // Remove existing dots before redraw
             const existingDots = document.querySelectorAll('.dot');
             existingDots.forEach(d => d.remove());
 
-            // Draw all shots
             shots.forEach(shot => {
                 const dot = document.createElement('div');
                 dot.className = `dot ${shot.result}`;
@@ -157,7 +136,6 @@
                 container.appendChild(dot);
             });
 
-            // Update Header Stats
             const total = shots.length;
             const makes = shots.filter(s => s.result === 'make').length;
             const percentage = total === 0 ? 0 : Math.round((makes / total) * 100);
@@ -166,22 +144,18 @@
             document.getElementById('stat-pct').innerText = percentage + "%";
         }
 
-        // 4. Persistence: Save to Browser Storage
         function saveAndRefresh() {
             localStorage.setItem('basketballShots', JSON.stringify(shots));
             refreshUI();
         }
 
-        // 5. Features: Undo and Clear
         function undoLast() {
-            if (shots.length > 0) {
-                shots.pop(); // Remove the last item in the array
-                saveAndRefresh();
-            }
+            shots.pop();
+            saveAndRefresh();
         }
 
         function clearShots() {
-            if(confirm("Are you sure? This will delete all session data.")) {
+            if(confirm("Reset all data?")) {
                 shots = [];
                 localStorage.removeItem('basketballShots');
                 refreshUI();
